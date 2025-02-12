@@ -18,7 +18,7 @@ import {
 
 } from "@lark-base-open/js-sdk";
 
-import { TradeDetail, TradeHead, TableHead, parseBankCard, formateDate } from "./trade.js"
+import { TradeDetail, TradeHead, TableHead, parseBankCard, formateDate,filterRepeatTrade } from "./trade.js"
 import { TableInfo, getTableInfo } from "./base.js"
 
 import pdfToText from 'react-pdftotext'
@@ -35,27 +35,43 @@ enum LoadStat {
   Loading,
   Preview,
   Done,
+  Error,
 }
 
 function LoadApp() {
 
   const [tableInfo, setTableInfo] = useState<TableInfo>({} as TableInfo)
   const [state, setState] = useState<LoadStat>(LoadStat.Init);
-  const [msgs, setmsgs] = useState<string[]>([] as string[]);
+  const [msgs, setMsgs] = useState<string[]>([] as string[]);
+  const [errors, setErrors] = useState<string[]>([] as string[]);
   let detailsRef = useRef<TradeDetail[]>([] as TradeDetail[])
-  let errors: string[] = [] as string[]
 
 
-  const selectFile = useCallback((files: File[]) => {
+  const selectFile = (files: File[]) => {
     setState(LoadStat.Loading)
 
     pdfToText(files[0]).then((textContent) => {
-      ({ details: detailsRef.current, errors } = parseBankCard(textContent))
-      console.log(detailsRef.current)
-      setState(LoadStat.Preview)
+      let { details, errors } = parseBankCard(textContent)
+      if (errors.length>0) {
+        setState(LoadStat.Error)
+        setErrors(errors)
+        return
+      }
+      console.log("selectFile, before filter",details)
+      filterRepeatTrade(details, tableInfo).then(({newDetails, msgs, errMsg})=>{
+        if (errMsg.length>0) {
+          setState(LoadStat.Error)
+          setErrors(errMsg)
+          return
+        }       
+        console.log("selectFile, aflter filter",newDetails)
+        detailsRef.current = newDetails
+        setState(LoadStat.Preview)
+        setMsgs(msgs)
+      })
     })
 
-  }, []);
+  }
 
   const importFile = () => {
     const fieldMetaList = tableInfo.fieldMetaList;

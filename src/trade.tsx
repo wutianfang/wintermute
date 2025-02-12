@@ -1,5 +1,21 @@
 import { TableInfo, getTableInfo } from "./base.js"
 
+import {
+  FieldType,
+  IOpenSegment,
+  IOpenNumber,
+  IOpenSegmentType,
+  IOpenTextSegment,
+  IWidgetTable,
+  IWidgetView,
+  ViewType,
+  bitable,
+  IRecordValue,
+  IOpenCellValue,
+  IGetRecordsResponse,
+  IGetRecordsParams,
+  IRecord,
+} from "@lark-base-open/js-sdk";
 
 export class TradeDetail {
   date: Date
@@ -96,10 +112,10 @@ export function parseBankCard(text: string): { details: TradeDetail[], errors: s
 }
 
 
-/*
-export function filterRepeatTrade(details: TradeDetail[] ,tableInfo :TableInfo):Promise<{newDetails: TradeDetail[],msgs:string[],errMsg:string[]}> {
-  return new Promise(function(resolve, reject){
-    const rawTradeCount = details.length
+
+export async function filterRepeatTrade(details: TradeDetail[] ,tableInfo :TableInfo):Promise<{newDetails: TradeDetail[],msgs:string[],errMsg:string[]}> {
+  
+    const oldTradeCount = details.length
     //确定唯一键的fieldId
     let uniqKeyFieldId :string =""
     tableInfo.fieldMetaList.forEach(fieldMeta=>{
@@ -108,21 +124,43 @@ export function filterRepeatTrade(details: TradeDetail[] ,tableInfo :TableInfo):
       }
     })
     if (uniqKeyFieldId == "") {
-        resolve({errMsg:["没有找到唯一键字段x"]})
+        return {newDetails: [],msgs:[], errMsg:["没有找到唯一键字段x"]}
     }
     // 组装一个明细的map，方便后面去重
     const tradeMap: { [key: string]: TradeDetail } = {}
-    for (key in details) {
+    for (let key in details) {
       tradeMap[details[key].uniqId] = details[key]
     }
 
     // 遍历表格所有数据
-    const recordList = await tableInfo.selectTable.getRecordList();
-    for (const record of recordList) {
-      const cell = await record.getCellByField(uniqKeyFieldId);
-        
+    const allRecordList:IRecord[] = []
+    let bHasMore :boolean = true
+    let sPageToken:string |undefined = ""
+    while (bHasMore) {
+      const param :IGetRecordsParams={
+        pageSize:500,
+      }
+      if (sPageToken!="") {
+        param.pageToken = sPageToken
+      }
+      const {records,hasMore,pageToken} = await tableInfo.selectTable.getRecords(param)
+      sPageToken = pageToken    
+      bHasMore = hasMore  
+      for (let key in records) {
+          const uniqIdField = records[key].fields[uniqKeyFieldId] as IOpenTextSegment[]
+          const uniqId =  uniqIdField[0].text
+          delete tradeMap[uniqId]
+      }
     }
-  })
+
+    let ret :TradeDetail[] =[]
+    for (let key in tradeMap) {
+      ret.push(tradeMap[key])
+    }
+    let msg:string = "解析出数据共"+oldTradeCount+"条，过滤去重后待导入数据共"+ret.length+"条。"
+
+    return {newDetails: ret,msgs:[msg], errMsg:[]}
+   
 }
-*/
+
 
