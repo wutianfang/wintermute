@@ -212,8 +212,8 @@ export function parseCreditCard(text: string): { details: TradeDetail[], errors:
         details.push(new TradeDetail(
             date,
             "CNY",
-            amount,
-            totalAmount,
+            -amount,
+            -totalAmount,
             AccountTypeCredit,
             counterParty,
             AccountTypeCredit, ""
@@ -283,9 +283,9 @@ export async function filterRepeatTrade(details: TradeDetail[], tableInfo: Table
 
 function analyseCategory(detail: TradeDetail): TradeDetail {
 
-    if (detail.counterParty == "滴滴出行" || detail.counterParty == "广州骑安") {
+    if (detail.counterParty.includes("滴滴出行") || detail.counterParty.includes("广州骑安")) {
         detail.category = "出行"
-    } else if (detail.counterParty == "融通地产") {
+    } else if (detail.counterParty.includes("融通地产")) {
         detail.category = "租房"
     } else if (detail.counterParty == "北京联通") {
         detail.category = "话费"

@@ -15,6 +15,7 @@ import {
     ViewType,
     bitable,
     IRecordValue,
+    IOpenSingleSelect,
     IOpenCellValue,
 
 } from "@lark-base-open/js-sdk";
@@ -115,27 +116,56 @@ function LoadApp() {
         console.log("fieldMapId", fieldMapId)
 
         let records: IRecordValue[] = []
-        detailsRef.current.forEach((detail) => {
-
+        let importErrMsgs: string[] = []
+        for (let cKey in detailsRef.current) {
+            let detail = detailsRef.current[cKey]
             let v: { [fieldId: string]: IOpenCellValue; } = {}
             Object.entries(detail).map(([key, value]) => {
+                // let value = detail[key] as any
                 if (typeof value == "number") {
                     v[fieldMapId[key]] = value
-                } else if (typeof value === "string") {
-                    v[fieldMapId[key]] = [
-                        { type: IOpenSegmentType.Text, text: value },
-                    ];
                 } else if (value instanceof Date) {
                     v[fieldMapId[key]] = value.getTime()
+                } else if (typeof value === "string") {
+                    let cellValue: IOpenCellValue
+                    if (value == "") {
+                        cellValue = null
+                    } else if (key == "category") {
+                        if (!(value in tableInfo.fieldOptionMapCategory)) {
+                            importErrMsgs.push(`"分类"无法找到对应下拉选手。类型：${value}`)
+                            return
+                        }
+                        cellValue = {
+                            id: tableInfo.fieldOptionMapCategory[value],
+                            text: value,
+                        }
+                    } else if (key == "accountName") {
+                        if (!(value in tableInfo.fieldOptionMapAccount)) {
+                            importErrMsgs.push(`"账户"无法找到对应下拉选手。账户：${value}`)
+                            return
+                        }
+                        cellValue = {
+                            id: tableInfo.fieldOptionMapAccount[value],
+                            text: value,
+                        }
+                    } else {
+                        cellValue = [{ type: IOpenSegmentType.Text, text: value }]
+                    }
+                    v[fieldMapId[key]] = cellValue;
                 }
 
             })
             records.push({
                 fields: v
             })
-        })
-        records = [records[0], records[1], records[2]]
+        }
         console.log("records", records)
+        if (importErrMsgs.length > 0) {
+            setErrors(importErrMsgs)
+            setState(LoadStat.Error)
+            return
+        }
+        //records = [records[0], records[1], records[2], records[3], records[4]]
         tableInfo.selectTable.addRecords(records).then(
             () => {
                 setState(LoadStat.Done)
