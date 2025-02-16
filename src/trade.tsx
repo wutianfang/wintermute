@@ -42,7 +42,7 @@ export class TradeDetail {
         this.transactionType = transactionType;
         this.counterParty = counterParty;
         this.accountName = accountName;
-        this.uniqId = [accountName, formateDate(date, false), String(transactionAmount), String(balance), counterParty, transactionType].join("||")
+        this.uniqId = [accountName, formateDate(date, false), String(transactionAmount), String(balance)].join("||")
         this.category = category
         this.importTime = formateDate(new Date(), true)
 
@@ -161,14 +161,14 @@ export function parseCreditCard(text: string): { details: TradeDetail[], errors:
 
     console.log("parseCreditCard", text)
 
-    // 还款金额
+    // 总账单金额。变量名其实起错了，不改了。。
     let repayAmountMatch = /本期还款总额   ¥ ([\d,]+\.\d{2})/.exec(text)
     if (repayAmountMatch == null) {
-        return { details: details, errors: ["未找到还款金额！"] }
+        return { details: details, errors: ["未找到总账单金额！"] }
     }
     let repayAmount = Number(repayAmountMatch[1].replace(/,/g, ""))
     if (isNaN(repayAmount)) {
-        return { details: details, errors: [`还款接口解析失败！match:${repayAmountMatch[0]}`] }
+        return { details: details, errors: [`总账单金额解析失败！match:${repayAmountMatch[1]}`] }
     }
 
     // 账单日
@@ -177,9 +177,31 @@ export function parseCreditCard(text: string): { details: TradeDetail[], errors:
         return { details: details, errors: ["未找到账单日！"] }
     }
     let year = Number(yearMatch[1])
+    console.log("year", year)
+
+    // 自动还款金额
+    let autoReplayAmountMatch = /(\d{2}\/\d{2})\s+自动还款\s+\-([\d,]+\.\d{2})/.exec(text)
+    if (autoReplayAmountMatch == null) {
+        return { details: details, errors: ["未找到还款金额！"] }
+    }
+    let autoReplayAmount = Number(autoReplayAmountMatch[2].replace(/,/g, ""))
+    if (isNaN(autoReplayAmount)) {
+        return { details: details, errors: [`还款金额解析失败！match:${autoReplayAmountMatch[2]}`] }
+    }
+    details.push(new TradeDetail(
+        new Date(year + "/" + autoReplayAmountMatch[1]),
+        "CNY",
+        autoReplayAmount, // 为了和银行卡账户的扣款打平，这里用正数
+        0,
+        AccountTypeCredit,
+        "自动还款",
+        AccountTypeCredit, ""
+    ));
+
+    // 累加总金额，最终校验用
     let totalAmount = 0
 
-    console.log("year", year)
+
     let match;
     const transactionPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.*?)\s+(-?[\d,]+\.\d{2})\s+\d{4}/g
     while ((match = transactionPattern.exec(text)) !== null) {
@@ -241,7 +263,7 @@ export async function filterRepeatTrade(details: TradeDetail[], tableInfo: Table
         }
     })
     if (uniqKeyFieldId == "") {
-        return { newDetails: [], msgs: [], errMsg: ["没有找到唯一键字段x"] }
+        return { newDetails: [], msgs: [], errMsg: ["没有找到唯一键字段"] }
     }
     // 组装一个明细的map，方便后面去重
     const tradeMap: { [key: string]: TradeDetail } = {}
@@ -265,6 +287,9 @@ export async function filterRepeatTrade(details: TradeDetail[], tableInfo: Table
         bHasMore = hasMore
         for (let key in records) {
             const uniqIdField = records[key].fields[uniqKeyFieldId] as IOpenTextSegment[]
+            if (uniqIdField == null || uniqIdField.length == 0) {
+                continue
+            }
             const uniqId = uniqIdField[0].text
             delete tradeMap[uniqId]
         }
@@ -293,6 +318,8 @@ function analyseCategory(detail: TradeDetail): TradeDetail {
         detail.category = "信用卡还款"
     } else if ((detail.transactionType == "存款认购起息" || detail.transactionType == "基金申购") && detail.transactionAmount < 0) {
         detail.category = "理财"
+    } else if (detail.accountName == AccountTypeCredit && detail.counterParty == "自动还款") {
+        detail.category = "信用卡还款"
     }
 
     return detail

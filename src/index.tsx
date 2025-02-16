@@ -125,7 +125,7 @@ function LoadApp() {
                 if (typeof value == "number") {
                     v[fieldMapId[key]] = value
                 } else if (value instanceof Date) {
-                    v[fieldMapId[key]] = value.getTime()
+                    v[fieldMapId[key]] = value.getTime() + 1000 // 加1000目的是确保筛选日期时不会出问题。0时的日期，筛选早于、晚于时，行为有点不可控。。
                 } else if (typeof value === "string") {
                     let cellValue: IOpenCellValue
                     if (value == "") {
